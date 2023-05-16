@@ -121,13 +121,13 @@ class Client:
         #Buttons   
         ip_entry = tk.Entry(self.window)#The text area
         ip_entry.pack(side="top")
-        self.window.bind('<Return>', lambda x: self.Getmsg())
-        send_button = tk.Button(self.window,text="Send", command=self.Getmsg)
+        self.window.bind('<Return>', lambda x: self.Getip())
+        send_button = tk.Button(self.window,text="Send", command=self.Getip)
         send_button.pack(side="top")
         
         self.window.mainloop()
             
-    def Getmsg(self):#get the message and delete the text field, and call the convert funtion with the text collected
+    def Getip(self):#get the message and delete the text field, and call the convert funtion with the text collected
         global msg
         msg=ip_entry.get() 
         ip_entry.delete(0,len(msg))  
@@ -137,9 +137,9 @@ class Client:
         ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
         server_port = 9999
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
+            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
             print(ip,server_port)
-            s.connect((ip, server_port))
+            self.s.connect((ip, server_port))
             self.window.destroy()
             threading.Thread(target=self.Client_Zoom_Gui).start()
             threading.Thread(target=self.Chat_Gui).start()
