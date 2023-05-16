@@ -33,22 +33,27 @@ class Owner:
         while True:
             self.s.listen(5)
             client, ip = self.s.accept()
-            threading.Thread(target=self.handle_client, args=(client, ip)).start()
-            threading.Thread(target=self.receive_messages).start()      
+            self.handle_client(client, ip)
+            threading.Thread(target=self.receive_messages,args=(client,)).start()      
         
     def handle_client(self,client, ip):
         if not self.is_ip_exist(ip):
             self.ip_addresses.append(ip)
-            self.clients.append(client)     
+            self.clients.append(client) 
                         
-    def receive_messages(self):
+    def receive_messages(self,client):
         print(1)
         while True:
             try:
-                message = self.s.recv(1024).decode()
-                print(message)
+                message = client.recv(1024).decode()
+                self.chat_window.config(state=tk.NORMAL)
+                self.chat_window.insert(tk.END, message + "\n")
+                self.chat_window.config(state=tk.DISABLED)
+                self.chat_window.see(tk.END)
             except:
                 pass
+            self.chat_window.mainloop()#trying to spring the msg on the chat_window
+
            
     def is_ip_exist(self,ip):
         return ip in self.ip_addresses          
@@ -76,29 +81,29 @@ class Owner:
         pyperclip.copy(ip_int)   
         
     def Owner_Chat_Gui(self):
-        window = tk.Tk()
-        window.title("Chat Client")
+        self.chat_window = tk.Tk()
+        self.chat_window.title("Chat Client")
 
-        message_label = tk.Label(window, text="Chat Messages:")
+        message_label = tk.Label(self.chat_window, text="Chat Messages:")
         message_label.pack()
-        messages_text = tk.Text(window, height=10, width=50)
+        messages_text = tk.Text(self.chat_window, height=10, width=50)
         messages_text.pack()
         messages_text.config(state=tk.DISABLED)
 
-        name_label = tk.Label(window, text="Enter your name:")
+        name_label = tk.Label(self.chat_window, text="Enter your name:")
         name_label.pack()
-        name_entry = tk.Entry(window)
+        name_entry = tk.Entry(self.chat_window)
         name_entry.pack()
 
-        message_label = tk.Label(window, text="Enter message:")
+        message_label = tk.Label(self.chat_window, text="Enter message:")
         message_label.pack()
-        message_entry = tk.Entry(window)
+        message_entry = tk.Entry(self.chat_window)
         message_entry.pack()
                     
-        window.bind('<Return>', lambda event: self.Owner_send_button_clicked(self.s,))
-        send_button = tk.Button(window, text="Send", command=lambda: self.Owner_send_button_clicked(self.s,))
+        self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked(self.s,))
+        send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked(self.s,))
         send_button.pack()
-        window.mainloop()
+        self.chat_window.mainloop()
                    
     def Owner_send_button_clicked(self,s):
         name = name_entry.get()
@@ -108,7 +113,7 @@ class Owner:
         
     def Msg_to_All(self,name,msg):
         for client in self.clients:
-            client.send(f"{name}:{msg}".encode())       
+            client.sendall(f"{name}:{msg}".encode())       
             
             
 class Client:
@@ -134,7 +139,10 @@ class Client:
         self.int2ip() 
     
     def int2ip(self):#getting the ip from button, and then convert it and connect    
-        ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
+        try:   
+            ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
+        except:
+            pass        
         server_port = 9999
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
