@@ -41,19 +41,38 @@ class Owner:
         if not self.is_ip_exist(ip):
             self.ip_addresses.append(ip)
             self.clients.append(client) 
+            
+    
+    def Update_window(self):
+        print(1)
+        y_position=25
+        self.chat_messages.insert(tk.END, self.message + "\n")
+        y_position += 1
+        if y_position >= 6:
+            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+        self.chat_window.update_idletasks()       
+        self.chat_window.mainloop()
+        
+        
+    def Update_window_for_Owner(self,name,msg):
+        txt=f"{name}:{msg}"
+        y_position=25
+        self.chat_messages.insert(tk.END, txt + "\n")
+        y_position += 1
+        if y_position >= 6:
+            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+        self.chat_window.update_idletasks()       
+        self.chat_window.mainloop()    
                         
     def receive_messages(self,client):
-        y_position=25
         while True:
             try:
-                message = client.recv(1024).decode()
-                self.chat_messages.insert(tk.END, message + "\n")
-                y_position += 1
-                if y_position >= 6:
-                    self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
-
-                self.chat_window.update_idletasks()       
-                self.chat_window.mainloop()
+                self.message = client.recv(1024).decode()
+                msg=self.message.split(':')
+                self.name=msg[0]
+                self.txt=msg[1]
+                self.Msg_to_All(self.name,self.txt)
+                self.Update_window()
             except:
                 pass
 
@@ -85,7 +104,7 @@ class Owner:
         
     def Owner_Chat_Gui(self):
         self.chat_window = tk.Tk()
-        self.chat_window.title("Chat Client")
+        self.chat_window.title("Chat Owner")
         
         self.chat_messages = scrolledtext.ScrolledText(self.chat_window, height=10, width=50)
         self.chat_messages.pack(anchor=tk.W,expand=True)
@@ -95,13 +114,13 @@ class Owner:
         
         name_label = tk.Label(self.chat_window, text="Enter your name:")
         name_label.pack()
-        name_entry = tk.Entry(self.chat_window)
-        name_entry.pack()
+        self.name_entry = tk.Entry(self.chat_window)
+        self.name_entry.pack()
 
         message_label = tk.Label(self.chat_window, text="Enter message:")
         message_label.pack()
-        message_entry = tk.Entry(self.chat_window)
-        message_entry.pack()
+        self.message_entry = tk.Entry(self.chat_window)
+        self.message_entry.pack()
         
                     
         self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked(self.s,))
@@ -110,14 +129,16 @@ class Owner:
         self.chat_window.mainloop()
                    
     def Owner_send_button_clicked(self,s):
-        name = name_entry.get()
-        message = message_entry.get()
-        self.Msg_to_All(s, name, message)
-        message_entry.delete(0, tk.END)#deleting the message box after sending
+        name = self.name_entry.get()
+        message = self.message_entry.get()
+        self.Msg_to_All(name, message)
+        self.Update_window_for_Owner(name, message)
+        
+        self.message_entry.delete(0, tk.END)#deleting the message box after sending#######check why not working
         
     def Msg_to_All(self,name,msg):
         for client in self.clients:
-            client.sendall(f"{name}:{msg}".encode())       
+            client.send(f"{name}:{msg}".encode())       
                         
 class Client:
     def Join_Call(self):
@@ -152,6 +173,7 @@ class Client:
             print(ip,server_port)
             self.s.connect((ip, server_port))
             self.window.destroy()
+            threading.Thread(target=self.recieve_msg).start()
             threading.Thread(target=self.Client_Zoom_Gui).start()
             threading.Thread(target=self.Chat_Gui).start()
         except:
@@ -181,7 +203,21 @@ class Client:
             self.send(size_bytes)
 
             # Send pixels
-            self.sendall(pixels)    
+            self.sendall(pixels)  
+            
+    def recieve_msg(self):
+        y_position=25
+        while True:
+            try:
+                message=self.s.recv(1024).decode()  
+                self.chat_messages.insert(tk.END, message + "\n")
+                y_position += 1
+                if y_position >= 6:
+                    self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+                self.chatwindow.update_idletasks()       
+                self.chatwindow.mainloop()
+            except:
+                pass
         
     def Client_Zoom_Gui(self):
         self.window=tk.Tk()
