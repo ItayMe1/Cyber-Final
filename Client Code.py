@@ -5,13 +5,14 @@ import tkinter as tk
 import numpy as np
 import pyautogui 
 import cv2
-import zlib
 import struct
 import pyperclip
 import mss
 import pickle
+from tkinter import scrolledtext
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
+from zlib import compress
 class Owner:
     def __init__(self):
         self.clients=[]
@@ -42,17 +43,19 @@ class Owner:
             self.clients.append(client) 
                         
     def receive_messages(self,client):
-        print(1)
+        y_position=25
         while True:
             try:
                 message = client.recv(1024).decode()
-                self.chat_window.config(state=tk.NORMAL)
-                self.chat_window.insert(tk.END, message + "\n")
-                self.chat_window.config(state=tk.DISABLED)
-                self.chat_window.see(tk.END)
+                self.chat_messages.insert(tk.END, message + "\n")
+                y_position += 1
+                if y_position >= 6:
+                    self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+
+                self.chat_window.update_idletasks()       
+                self.chat_window.mainloop()
             except:
                 pass
-            self.chat_window.mainloop()#trying to spring the msg on the chat_window
 
            
     def is_ip_exist(self,ip):
@@ -72,7 +75,7 @@ class Owner:
         btn_video=tk.Button(self.window,text='start Camera',width=50)
         btn_video.pack(anchor=tk.CENTER,expand=True)
 
-        self.window.mainloop()
+        self.window.mainloop()               
         
     def ip2int(self):#converting your ip into numbers,working
         hostname = socket.gethostname()
@@ -83,13 +86,13 @@ class Owner:
     def Owner_Chat_Gui(self):
         self.chat_window = tk.Tk()
         self.chat_window.title("Chat Client")
+        
+        self.chat_messages = scrolledtext.ScrolledText(self.chat_window, height=10, width=50)
+        self.chat_messages.pack(anchor=tk.W,expand=True)
 
         message_label = tk.Label(self.chat_window, text="Chat Messages:")
         message_label.pack()
-        messages_text = tk.Text(self.chat_window, height=10, width=50)
-        messages_text.pack()
-        messages_text.config(state=tk.DISABLED)
-
+        
         name_label = tk.Label(self.chat_window, text="Enter your name:")
         name_label.pack()
         name_entry = tk.Entry(self.chat_window)
@@ -99,6 +102,7 @@ class Owner:
         message_label.pack()
         message_entry = tk.Entry(self.chat_window)
         message_entry.pack()
+        
                     
         self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked(self.s,))
         send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked(self.s,))
@@ -114,8 +118,7 @@ class Owner:
     def Msg_to_All(self,name,msg):
         for client in self.clients:
             client.sendall(f"{name}:{msg}".encode())       
-            
-            
+                        
 class Client:
     def Join_Call(self):
         global ip_entry
@@ -153,12 +156,38 @@ class Client:
             threading.Thread(target=self.Chat_Gui).start()
         except:
             pass
+    
+    def send_screenshot(self):
+        print(1)
+        WIDTH = 1900
+        HEIGHT = 1000
+        with mss() as sct:
+        # The region to capture
+            rect = {'top': 0, 'left': 0, 'width': WIDTH, 'height': HEIGHT}
+
+        while 'recording':
+            # Capture the screen
+            img = sct.grab(rect)
+            # Tweak the compression level here (0-9)
+            pixels = (img.rgb, 6)
+
+            # Send the size of the pixels length
+            size = len(pixels)
+            size_len = compress(size.bit_length() + 7) // 8
+            self.s.send(bytes([size_len]))
+
+            # Send the actual pixels length
+            size_bytes = size.to_bytes(size_len, 'big')
+            self.send(size_bytes)
+
+            # Send pixels
+            self.sendall(pixels)    
         
     def Client_Zoom_Gui(self):
         self.window=tk.Tk()
         self.window.title("ZoOm")
         self.window.geometry('300x300')
-        btn_listen=tk.Button(self.window, text='Share Screen', width=50)#add a function
+        btn_listen=tk.Button(self.window, text='Share Screen', width=50,command=self.send_screenshot)#add a function
         btn_listen.pack(anchor=tk.CENTER,expand=True)
 
         btn_video=tk.Button(self.window,text='start Camera',width=50)
@@ -169,13 +198,13 @@ class Client:
         global name_entry,message_entry
         self.chatwindow = tk.Tk()
         self.chatwindow.title("Chat Client")
+        
+        self.chat_messages = scrolledtext.ScrolledText(self.chatwindow, height=10, width=50)
+        self.chat_messages.pack(anchor=tk.W,expand=True)
 
         message_label = tk.Label(self.chatwindow, text="Chat Messages:")
         message_label.pack()
-        messages_text = tk.Text(self.chatwindow, height=10, width=50)
-        messages_text.pack()
-        messages_text.config(state=tk.DISABLED)
-
+        
         name_label = tk.Label(self.chatwindow, text="Enter your name:")
         name_label.pack()
         name_entry = tk.Entry(self.chatwindow)
