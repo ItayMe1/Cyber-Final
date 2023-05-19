@@ -14,6 +14,8 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from zlib import compress
 class Owner:
+    global shift
+    shift=10
     def __init__(self):
         self.clients=[]
         self.ip_addresses=[]
@@ -42,9 +44,31 @@ class Owner:
             self.ip_addresses.append(ip)
             self.clients.append(client) 
             
+    def caesar_encrypt(self,plaintext):
+        ciphertext = ""
+        for char in plaintext:
+            if char.isalpha():
+                ascii_offset = ord('A') if char.isupper() else ord('a')
+                shifted_char = chr((ord(char) - ascii_offset + shift) % 26 + ascii_offset)
+                ciphertext += shifted_char
+            else:
+                ciphertext += char
+        return ciphertext
+
+    def caesar_decrypt(self, plaintext):
+        ciphertext = ""
+        for char in plaintext:
+            if char.isalpha():
+                ascii_offset = ord('A') if char.isupper() else ord('a')
+                shifted_char = chr((ord(char) - ascii_offset + shift * -1) % 26 + ascii_offset)
+                ciphertext += shifted_char
+            else:
+                ciphertext += char
+        return ciphertext
+
+
     
     def Update_window(self):
-        print(1)
         y_position=25
         self.chat_messages.insert(tk.END, self.message + "\n")
         y_position += 1
@@ -55,7 +79,7 @@ class Owner:
         
         
     def Update_window_for_Owner(self,name,msg):
-        txt=f"{name}:{msg}"
+        txt=(f"{name}:{msg}")
         y_position=25
         self.chat_messages.insert(tk.END, txt + "\n")
         y_position += 1
@@ -68,6 +92,7 @@ class Owner:
         while True:
             try:
                 self.message = client.recv(1024).decode()
+                self.message=self.caesar_decrypt(self.message)
                 msg=self.message.split(':')
                 self.name=msg[0]
                 self.txt=msg[1]
@@ -75,6 +100,8 @@ class Owner:
                 self.Update_window()
             except:
                 pass
+
+                
 
            
     def is_ip_exist(self,ip):
@@ -123,12 +150,12 @@ class Owner:
         self.message_entry.pack()
         
                     
-        self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked(self.s,))
-        send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked(self.s,))
+        self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked())
+        send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked())
         send_button.pack()
         self.chat_window.mainloop()
                    
-    def Owner_send_button_clicked(self,s):
+    def Owner_send_button_clicked(self):
         name = self.name_entry.get()
         message = self.message_entry.get()
         self.Msg_to_All(name, message)
@@ -137,12 +164,16 @@ class Owner:
         self.message_entry.delete(0, tk.END)#deleting the message box after sending#######check why not working
         
     def Msg_to_All(self,name,msg):
+        txt=(f"{name}:{msg}")
+        encrypted_txt=self.caesar_encrypt(txt)
         for client in self.clients:
-            client.send(f"{name}:{msg}".encode())       
+            client.send(encrypted_txt.encode())         
                         
 class Client:
     def Join_Call(self):
         global ip_entry
+        global shift
+        shift=10
         #Tempararly window
         self.window=tk.Tk()
         self.window.title("ZoOm")
@@ -161,6 +192,29 @@ class Client:
         msg=ip_entry.get() 
         ip_entry.delete(0,len(msg))  
         self.int2ip() 
+        
+    def caesar_encrypt(self,plaintext):
+        ciphertext = ""
+        for char in plaintext:
+            if char.isalpha():
+                ascii_offset = ord('A') if char.isupper() else ord('a')
+                shifted_char = chr((ord(char) - ascii_offset + shift) % 26 + ascii_offset)
+                ciphertext += shifted_char
+            else:
+                ciphertext += char
+        return ciphertext
+
+    def caesar_decrypt(self, plaintext):
+        ciphertext = ""
+        for char in plaintext:
+            if char.isalpha():
+                ascii_offset = ord('A') if char.isupper() else ord('a')
+                shifted_char = chr((ord(char) - ascii_offset + shift * -1) % 26 + ascii_offset)
+                ciphertext += shifted_char
+            else:
+                ciphertext += char
+        return ciphertext
+ 
     
     def int2ip(self):#getting the ip from button, and then convert it and connect    
         try:   
@@ -180,7 +234,6 @@ class Client:
             pass
     
     def send_screenshot(self):
-        print(1)
         WIDTH = 1900
         HEIGHT = 1000
         with mss() as sct:
@@ -209,7 +262,8 @@ class Client:
         y_position=25
         while True:
             try:
-                message=self.s.recv(1024).decode()  
+                message=self.s.recv(1024).decode() 
+                message=self.caesar_decrypt(message) 
                 self.chat_messages.insert(tk.END, message + "\n")
                 y_position += 1
                 if y_position >= 6:
@@ -262,9 +316,11 @@ class Client:
         self.Client_send_message(name, message)
         message_entry.delete(0, tk.END)#deleting the message box after sending
   
-    def Client_send_message(self,name, message):
+    def Client_send_message(self,name, message):#sending the encrypted txt,working
         try:
-            self.s.send(f"{name}:{message}".encode())
+            txt=(f"{name}:{message}")
+            encrypt_txt=self.caesar_encrypt(txt)
+            self.s.send(encrypt_txt.encode())
         except:
             print("An error occurred while sending the message.")
         
@@ -297,3 +353,4 @@ try:
     Home_Screen_GUI()
 except :
     pass
+        
