@@ -8,7 +8,7 @@ import cv2
 import struct
 import pyperclip
 import mss
-import pickle
+import pyaudio
 from tkinter import scrolledtext
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -37,12 +37,45 @@ class Owner:
             self.s.listen(5)
             client, ip = self.s.accept()
             self.handle_client(client, ip)
+            threading.Thread(target=self.Recieve_audio).start()
             threading.Thread(target=self.receive_messages,args=(client,)).start()      
         
     def handle_client(self,client, ip):
         if not self.is_ip_exist(ip):
             self.ip_addresses.append(ip)
             self.clients.append(client) 
+            
+            
+    def Recieve_audio(self):
+        HOST = socket.gethostname()
+        PORT = 5000
+        # Audio
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 44100
+        CHUNK = 1024
+
+        frames = []
+
+        p = pyaudio.PyAudio()
+        stream = p.open(format=FORMAT,
+                        channels=CHANNELS,
+                        rate=RATE,
+                        input=True,
+                        frames_per_buffer=CHUNK)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.bind((HOST, PORT))
+            server_socket.listen(1)
+            conn, address = server_socket.accept()
+            while True:
+                try:
+                    data = stream.read(CHUNK)
+                    conn.sendall(data)
+                    frames.append(data)
+                except:
+                    pass
+    
             
     def caesar_encrypt(self,plaintext):
         ciphertext = ""
@@ -167,7 +200,7 @@ class Owner:
         txt=(f"{name}:{msg}")
         encrypted_txt=self.caesar_encrypt(txt)
         for client in self.clients:
-            client.send(encrypted_txt.encode())         
+            client.send(encrypted_txt.encode())      
                         
 class Client:
     def Join_Call(self):
@@ -192,6 +225,26 @@ class Client:
         msg=ip_entry.get() 
         ip_entry.delete(0,len(msg))  
         self.int2ip() 
+        
+    def Send_Audio(self):
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 44100
+        CHUNK = 1024
+
+        p = pyaudio.PyAudio()
+        stream = p.open(format=FORMAT,
+                        channels=CHANNELS,
+                        rate=RATE,
+                        output=True,
+                        frames_per_buffer=CHUNK)
+
+        while True:
+                try:
+                    data = self.s.recv(CHUNK)
+                    stream.write(data)
+                except:
+                    pass
         
     def caesar_encrypt(self,plaintext):
         ciphertext = ""
@@ -257,6 +310,34 @@ class Client:
 
             # Send pixels
             self.sendall(pixels)  
+    
+    
+    def Send_Audio(self):
+        HOST = socket.gethostname()
+        PORT = 5000
+        # Audio
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 44100
+        CHUNK = 20000
+
+        p = pyaudio.PyAudio()
+        stream = p.open(format=FORMAT,
+                        channels=CHANNELS,
+                        rate=RATE,
+                        output=True,
+                        frames_per_buffer=CHUNK)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((HOST, PORT))
+
+
+            while True:
+                try:
+                    data = client_socket.recv(CHUNK)
+                    stream.write(data)
+                except:
+                    pass
             
     def recieve_msg(self):
         y_position=25
@@ -280,7 +361,7 @@ class Client:
         btn_listen=tk.Button(self.window, text='Share Screen', width=50,command=self.send_screenshot)#add a function
         btn_listen.pack(anchor=tk.CENTER,expand=True)
 
-        btn_video=tk.Button(self.window,text='start Camera',width=50)
+        btn_video=tk.Button(self.window,text='Active Microhphone',width=50,command=self.Send_Audio)
         btn_video.pack(anchor=tk.CENTER,expand=True)
         self.window.mainloop()
         
@@ -353,4 +434,3 @@ try:
     Home_Screen_GUI()
 except :
     pass
-        
