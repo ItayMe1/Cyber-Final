@@ -37,7 +37,6 @@ class Owner:
             self.s.listen(5)
             client, ip = self.s.accept()
             self.handle_client(client, ip)
-            threading.Thread(target=self.Recieve_audio).start()
             threading.Thread(target=self.receive_messages,args=(client,)).start()      
         
     def handle_client(self,client, ip):
@@ -46,33 +45,29 @@ class Owner:
             self.clients.append(client) 
             
             
-    def Recieve_audio(self):
+    def Send_Audio(self):
         HOST = socket.gethostname()
         PORT = 5000
-        # Audio
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 44100
         CHUNK = 1024
 
-        frames = []
-
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
                         rate=RATE,
-                        input=True,
+                        output=True,
                         frames_per_buffer=CHUNK)
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((HOST, PORT))
-            server_socket.listen(1)
-            conn, address = server_socket.accept()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
+            client_socket.connect((HOST, PORT))
+            print("Connected to", HOST + ":" + str(PORT))
+
             while True:
                 try:
-                    data = stream.read(CHUNK)
-                    conn.sendall(data)
-                    frames.append(data)
+                    data = client_socket.recv(CHUNK)
+                    stream.write(data)
                 except:
                     pass
     
@@ -151,7 +146,7 @@ class Owner:
         btn_listen=tk.Button(self.window, text='Share Screen', width=50)#add a function
         btn_listen.pack(anchor=tk.CENTER,expand=True)
 
-        btn_video=tk.Button(self.window,text='start Camera',width=50)
+        btn_video=tk.Button(self.window,text='start share microphone',width=50,command=self.Send_Audio)
         btn_video.pack(anchor=tk.CENTER,expand=True)
 
         self.window.mainloop()               
@@ -200,7 +195,7 @@ class Owner:
         txt=(f"{name}:{msg}")
         encrypted_txt=self.caesar_encrypt(txt)
         for client in self.clients:
-            client.send(encrypted_txt.encode())      
+            client.send(encrypted_txt.encode())
                         
 class Client:
     def Join_Call(self):
@@ -226,23 +221,35 @@ class Client:
         ip_entry.delete(0,len(msg))  
         self.int2ip() 
         
-    def Send_Audio(self):
+    def Recieve_audio(self):
         FORMAT = pyaudio.paInt16
         CHANNELS = 1
         RATE = 44100
         CHUNK = 1024
+        HOST = socket.gethostname()
+        PORT = 5000
+
+        frames = []
 
         p = pyaudio.PyAudio()
         stream = p.open(format=FORMAT,
                         channels=CHANNELS,
                         rate=RATE,
-                        output=True,
+                        input=True,
                         frames_per_buffer=CHUNK)
 
-        while True:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+            server_socket.bind((HOST, PORT))
+            server_socket.listen(1)
+            print("Waiting for connection...")
+            conn, address = server_socket.accept()
+            print("Connection from " + address[0] + ":" + str(address[1]))
+
+            while True:
                 try:
-                    data = self.s.recv(CHUNK)
-                    stream.write(data)
+                    data = stream.read(CHUNK)
+                    conn.sendall(data)
+                    frames.append(data)
                 except:
                     pass
         
@@ -280,6 +287,7 @@ class Client:
             print(ip,server_port)
             self.s.connect((ip, server_port))
             self.window.destroy()
+            threading.Thread(target=self.Recieve_audio).start()
             threading.Thread(target=self.recieve_msg).start()
             threading.Thread(target=self.Client_Zoom_Gui).start()
             threading.Thread(target=self.Chat_Gui).start()
@@ -310,34 +318,6 @@ class Client:
 
             # Send pixels
             self.sendall(pixels)  
-    
-    
-    def Send_Audio(self):
-        HOST = socket.gethostname()
-        PORT = 5000
-        # Audio
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 44100
-        CHUNK = 20000
-
-        p = pyaudio.PyAudio()
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        output=True,
-                        frames_per_buffer=CHUNK)
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((HOST, PORT))
-
-
-            while True:
-                try:
-                    data = client_socket.recv(CHUNK)
-                    stream.write(data)
-                except:
-                    pass
             
     def recieve_msg(self):
         y_position=25
@@ -361,7 +341,7 @@ class Client:
         btn_listen=tk.Button(self.window, text='Share Screen', width=50,command=self.send_screenshot)#add a function
         btn_listen.pack(anchor=tk.CENTER,expand=True)
 
-        btn_video=tk.Button(self.window,text='Active Microhphone',width=50,command=self.Send_Audio)
+        btn_video=tk.Button(self.window,text='Share Camera',width=50)
         btn_video.pack(anchor=tk.CENTER,expand=True)
         self.window.mainloop()
         
