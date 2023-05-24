@@ -3,8 +3,8 @@ import socket
 import threading
 import tkinter as tk
 import numpy as np
-import pyautogui 
-import cv2
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import struct
 import pyperclip
 import mss
@@ -19,12 +19,35 @@ class Owner:
     def __init__(self):
         self.clients=[]
         self.ip_addresses=[]
+        self.list_of_keys=[]
+    
+    def decrypt_msg(self,encrypted_message, key):
+        private_key = RSA.import_key(key)
+        cipher_rsa = PKCS1_OAEP.new(private_key)
+        decrypted_message = cipher_rsa.decrypt(encrypted_message)
+        return decrypted_message.decode()
+    
+    def encrypt_msg(self,public_key, message):
+        key = RSA.import_key(public_key)
+        cipher_rsa = PKCS1_OAEP.new(key)
+        encrypted_message = cipher_rsa.encrypt(message.encode())
+        return encrypted_message
+    
+    def get_ip_address(self):
+        s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8",80))
+        return s.getsockname()[0]
         
-    def start_Call(self):##start a new server for the call
-        local_ip = socket.gethostbyname(socket.gethostname())
-        my_server_port=9999
+    def start_Call(self):
+        my_server_port = 9999
+
+        # Generate RSA key pair
+        self.key = RSA.generate(2048)
+        self.private_key = self.key.export_key()
+        self.public_key = self.key.publickey().export_key()
+
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.s.bind((local_ip,my_server_port))
+        self.s.bind(('0.0.0.0', my_server_port))       
         self.start_Guis()    
     
     def start_Guis(self):
@@ -33,12 +56,19 @@ class Owner:
         threading.Thread(target=self.Owner_Chat_Gui).start()
            
     def active_chat(self):
+        self.s.listen()
         while True:
-            self.s.listen(5)
             client, ip = self.s.accept()
-            self.handle_client(client, ip)
-            threading.Thread(target=self.receive_messages,args=(client,)).start()      
-        
+            print(type(client))
+            ##The Protocol
+            client.send(self.public_key)##sending the client the server p_key
+            client_public_key=client.recv(1024)
+            self.list_of_keys.append(client)
+            self.list_of_keys.append(client_public_key)
+            self.handle_client(client,ip)           
+            threading.Thread(target=self.receive_messages,args=(client,)).start()
+           
+            
     def handle_client(self,client, ip):
         if not self.is_ip_exist(ip):
             self.ip_addresses.append(ip)
@@ -70,66 +100,36 @@ class Owner:
                     stream.write(data)
                 except:
                     pass
-    
-            
-    def caesar_encrypt(self,plaintext):
-        ciphertext = ""
-        for char in plaintext:
-            if char.isalpha():
-                ascii_offset = ord('A') if char.isupper() else ord('a')
-                shifted_char = chr((ord(char) - ascii_offset + shift) % 26 + ascii_offset)
-                ciphertext += shifted_char
-            else:
-                ciphertext += char
-        return ciphertext
-
-    def caesar_decrypt(self, plaintext):
-        ciphertext = ""
-        for char in plaintext:
-            if char.isalpha():
-                ascii_offset = ord('A') if char.isupper() else ord('a')
-                shifted_char = chr((ord(char) - ascii_offset + shift * -1) % 26 + ascii_offset)
-                ciphertext += shifted_char
-            else:
-                ciphertext += char
-        return ciphertext
-
-
-    
-    def Update_window(self):
-        y_position=25
-        self.chat_messages.insert(tk.END, self.message + "\n")
-        y_position += 1
-        if y_position >= 6:
-            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
-        self.chat_window.update_idletasks()       
-        self.chat_window.mainloop()
+  
         
-        
-    def Update_window_for_Owner(self,name,msg):
-        txt=(f"{name}:{msg}")
-        y_position=25
-        self.chat_messages.insert(tk.END, txt + "\n")
-        y_position += 1
-        if y_position >= 6:
-            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
-        self.chat_window.update_idletasks()       
-        self.chat_window.mainloop()    
+    def Find_p_key(self,client):
+        time=0
+        for i in self.clients:
+            if i==client: 
+                return self.list_of_keys[time+1]
+            time+=1
                         
     def receive_messages(self,client):
-        while True:
+        if isinstance(client, socket.socket):
             try:
-                self.message = client.recv(1024).decode()
-                self.message=self.caesar_decrypt(self.message)
-                msg=self.message.split(':')
-                self.name=msg[0]
-                self.txt=msg[1]
-                self.Msg_to_All(self.name,self.txt)
-                self.Update_window()
+                while True:
+                    message = client.recv(1024)#not receiving the msg,check why
+                    print(message)
+                    decrypted_message=self.decrypt_msg(message,self.private_key)
+                    msg=decrypted_message.split(':')
+                    self.name=msg[0]
+                    self.txt=msg[1]
+                    self.Msg_to_All(self.name,self.txt)
+                    self.Update_window(decrypted_message)
             except:
                 pass
 
-                
+    def Find_clients_public_key(self,client):
+        times=0
+        for i in self.clients:
+            if i==client:
+                return self.list_of_keys[times+1]
+            times+=1
 
            
     def is_ip_exist(self,ip):
@@ -152,8 +152,7 @@ class Owner:
         self.window.mainloop()               
         
     def ip2int(self):#converting your ip into numbers,working
-        hostname = socket.gethostname()
-        ip = socket.gethostbyname(hostname)
+        ip = self.get_ip_address()
         ip_int = struct.unpack("!I", socket.inet_aton(ip))[0]
         pyperclip.copy(ip_int)   
         
@@ -174,8 +173,8 @@ class Owner:
 
         message_label = tk.Label(self.chat_window, text="Enter message:")
         message_label.pack()
-        self.message_entry = tk.Entry(self.chat_window)
-        self.message_entry.pack()
+        self.message_entry2 = tk.Entry(self.chat_window)
+        self.message_entry2.pack()
         
                     
         self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked())
@@ -183,21 +182,59 @@ class Owner:
         send_button.pack()
         self.chat_window.mainloop()
                    
-    def Owner_send_button_clicked(self):
+    def Owner_send_button_clicked(self):#caused if the owner sends a message
         name = self.name_entry.get()
-        message = self.message_entry.get()
+        message = self.message_entry2.get()
         self.Msg_to_All(name, message)
         self.Update_window_for_Owner(name, message)
         
-        self.message_entry.delete(0, tk.END)#deleting the message box after sending#######check why not working
+        self.message_entry2.delete(0, tk.END)#deleting the message box after sending#######check why not working
         
     def Msg_to_All(self,name,msg):
         txt=(f"{name}:{msg}")
-        encrypted_txt=self.caesar_encrypt(txt)
+        ##encrypted_txt=self.caesar_encrypt(txt)
         for client in self.clients:
-            client.send(encrypted_txt.encode())
+            clients_public_key=self.Find_clients_public_key(client)
+            encrypted_txt=self.encrypt_msg(clients_public_key,txt)
+            client.send(encrypted_txt)   
+    
+    def Update_window(self,decrypted_msg):
+        print(decrypted_msg)
+        y_position=25
+        self.chat_messages.insert(tk.END, decrypted_msg + "\n")
+        y_position += 1
+        if y_position >= 6:
+            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+        self.chat_window.update_idletasks()       
+        
+        
+    def Update_window_for_Owner(self,name,msg):
+        txt=(f"{name}:{msg}")
+        y_position=25
+        self.chat_messages.insert(tk.END, txt + "\n")
+        y_position += 1
+        if y_position >= 6:
+            self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
+        self.chat_window.update_idletasks()       
+        self.chat_window.mainloop()
                         
 class Client:
+    def __init__(self):
+            self.key = RSA.generate(2048)
+            self.private_key = self.key.export_key()
+            self.public_key = self.key.publickey().export_key()
+            
+    def decrypt_msg(self,encrypted_message,key):#key = RSA.generate(2048), the encrypted msg dont need to be encoded
+        cipher_rsa = PKCS1_OAEP.new(key)
+        decrypted_message = cipher_rsa.decrypt(encrypted_message)
+        return decrypted_message
+    
+    def encrypt_msg(self,public_key, message):
+        key = RSA.import_key(public_key)
+        cipher_rsa = PKCS1_OAEP.new(key)
+        encrypted_message = cipher_rsa.encrypt(message.encode())
+        return encrypted_message
+    
     def Join_Call(self):
         global ip_entry
         global shift
@@ -219,7 +256,7 @@ class Client:
         global msg
         msg=ip_entry.get() 
         ip_entry.delete(0,len(msg))  
-        self.int2ip() 
+        self.int2ip(msg) 
         
     def Recieve_audio(self):
         FORMAT = pyaudio.paInt16
@@ -241,10 +278,7 @@ class Client:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((HOST, PORT))
             server_socket.listen(1)
-            print("Waiting for connection...")
             conn, address = server_socket.accept()
-            print("Connection from " + address[0] + ":" + str(address[1]))
-
             while True:
                 try:
                     data = stream.read(CHUNK)
@@ -252,47 +286,24 @@ class Client:
                     frames.append(data)
                 except:
                     pass
-        
-    def caesar_encrypt(self,plaintext):
-        ciphertext = ""
-        for char in plaintext:
-            if char.isalpha():
-                ascii_offset = ord('A') if char.isupper() else ord('a')
-                shifted_char = chr((ord(char) - ascii_offset + shift) % 26 + ascii_offset)
-                ciphertext += shifted_char
-            else:
-                ciphertext += char
-        return ciphertext
-
-    def caesar_decrypt(self, plaintext):
-        ciphertext = ""
-        for char in plaintext:
-            if char.isalpha():
-                ascii_offset = ord('A') if char.isupper() else ord('a')
-                shifted_char = chr((ord(char) - ascii_offset + shift * -1) % 26 + ascii_offset)
-                ciphertext += shifted_char
-            else:
-                ciphertext += char
-        return ciphertext
- 
-    
-    def int2ip(self):#getting the ip from button, and then convert it and connect    
-        try:   
-            ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
-        except:
-            pass        
+   
+    def int2ip(self,msg):#getting the ip from button, and then convert it and connect   
+        self.s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
+        ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
+        print(ip)
         server_port = 9999
-        try:
-            self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
-            print(ip,server_port)
-            self.s.connect((ip, server_port))
+        self.s.connect((ip, server_port))       
+        try:  
             self.window.destroy()
+            self.servers_public_key=self.s.recv(1024)
+            self.s.send(self.public_key)
+
             threading.Thread(target=self.Recieve_audio).start()
-            threading.Thread(target=self.recieve_msg).start()
             threading.Thread(target=self.Client_Zoom_Gui).start()
             threading.Thread(target=self.Chat_Gui).start()
-        except:
-            pass
+            threading.Thread(target=self.recieve_msg).start()
+        except Exception as e: print(e)
+
     
     def send_screenshot(self):
         WIDTH = 1900
@@ -319,13 +330,14 @@ class Client:
             # Send pixels
             self.sendall(pixels)  
             
-    def recieve_msg(self):
+    def recieve_msg(self):#recv msg and decrypt it, dispaly on screen,working
         y_position=25
+        print(1)
         while True:
             try:
-                message=self.s.recv(1024).decode() 
-                message=self.caesar_decrypt(message) 
-                self.chat_messages.insert(tk.END, message + "\n")
+                message=self.s.recv(1024)
+                decrypted_message=self.decrypt_msg(message,self.key).decode()               
+                self.chat_messages.insert(tk.END, decrypted_message + "\n")
                 y_position += 1
                 if y_position >= 6:
                     self.chat_messages.yview_scroll(1, tk.UNITS)  # Scroll down one unit if y_position reaches 6
@@ -378,12 +390,9 @@ class Client:
         message_entry.delete(0, tk.END)#deleting the message box after sending
   
     def Client_send_message(self,name, message):#sending the encrypted txt,working
-        try:
             txt=(f"{name}:{message}")
-            encrypt_txt=self.caesar_encrypt(txt)
-            self.s.send(encrypt_txt.encode())
-        except:
-            print("An error occurred while sending the message.")
+            encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
+            self.s.send(encrypt_txt)
         
         
 def Home_Screen_GUI():
