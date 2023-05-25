@@ -15,6 +15,10 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from zlib import compress
 import pyshine as ps
 import pickle
+import cv2
+import imutils
+import time
+import base64
 class Owner:
     global shift
     shift=10
@@ -446,8 +450,81 @@ class Client:
             txt=(f"{name}:{message}")
             encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
             self.s.send(encrypt_txt)
-        
-        
+class Recv_Camera:
+    def __init__(self):
+        self.BUFF_SIZE = 65536
+        self.host_ip = "169.254.25.70"
+        self.port = 9999
+
+    def setup_connection(self):
+        print(self.host_ip)
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        host_address = (self.host_ip, self.port)
+        message = b'Hello'
+        client_socket.sendto(message, host_address)
+        self.receive_frames(client_socket)
+
+    def receive_frames(self,client_socket):
+        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
+
+        while True:
+            packet, _ = client_socket.recvfrom(self.BUFF_SIZE)
+            data = base64.b64decode(packet, ' /')
+            npdata = np.frombuffer(data, dtype=np.uint8)
+            frame = cv2.imdecode(npdata, 1)
+            frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow("RECEIVING VIDEO", frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                client_socket.close()
+                break
+            if cnt == frames_to_count:
+                try:
+                    fps = round(frames_to_count / (time.time() - st))
+                    st = time.time()
+                    cnt = 0
+                except:
+                    pass
+            cnt += 1       
+class Send_Camera:
+    def __init__(self):
+        self.BUFF_SIZE = 65536
+        self.host_ip = "169.254.25.70"
+        self.port = 9999 
+
+    def setup_connection(self):
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_address = (self.host_ip, self.port)
+        server_socket.bind(socket_address)
+        print('Listening at:', socket_address)
+        self.send_frames(server_socket)
+
+    def send_frames(self,server_socket):
+        vid = cv2.VideoCapture(0)
+        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
+        WIDTH = 400
+
+        while True:
+            msg, client_addr = server_socket.recvfrom(self.BUFF_SIZE)
+            print('GOT connection from ', client_addr)
+
+            while vid.isOpened():
+                _, frame = vid.read()
+                frame = imutils.resize(frame, width=WIDTH)
+                frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                cv2.imshow('TRANSMITTING VIDEO', frame)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    server_socket.close()
+                    break
+                if cnt == frames_to_count:
+                    try:
+                        fps = round(frames_to_count / (time.time() - st))
+                        st = time.time()
+                        cnt = 0
+                    except:
+                        pass
+                cnt += 1        
 def Home_Screen_GUI():
     global window
     window=tk.Tk()
@@ -465,12 +542,16 @@ def Home_Screen_GUI():
 def Create_Owner():
     window.destroy()
     owner=Owner()  
-    owner.start_Call()  
+    owner.start_Call() 
+    send_audio=Send_Camera()
+    send_audio.setup_connection() 
     
 def Create_Client():
     window.destroy()
     client=Client()  
-    client.Join_Call()  
+    client.Join_Call()
+    audio=Recv_Camera()
+    audio.setup_connection()  
     
 try:    
     Home_Screen_GUI()
