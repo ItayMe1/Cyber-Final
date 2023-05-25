@@ -13,6 +13,8 @@ from tkinter import scrolledtext
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from zlib import compress
+import pyshine as ps
+import pickle
 class Owner:
     global shift
     shift=10
@@ -59,7 +61,7 @@ class Owner:
         self.s.listen()
         while True:
             client, ip = self.s.accept()
-            print(type(client))
+            threading.Thread(target=self.Audio_Server).start()
             ##The Protocol
             client.send(self.public_key)##sending the client the server p_key
             client_public_key=client.recv(1024)
@@ -74,6 +76,28 @@ class Owner:
             self.ip_addresses.append(ip)
             self.clients.append(client) 
             
+    def Audio_Server(self):
+        # Socket Create
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        host_ip = '192.168.56.1'  # replace with the actual IP
+        port = 7777
+        socket_address = (host_ip, port)
+        server_socket.bind(socket_address)
+        server_socket.listen()
+        client, ip = server_socket.accept()
+        threading.Thread(target=self.send_microphone_output,args=(client,)).start()
+        
+    def send_microphone_output(self,client_socket):
+        mode = 'send'
+        audio, context = ps.audioCapture(mode=mode)
+        try:
+            while True:
+                frame = audio.get()
+                a = pickle.dumps(frame)
+                message = struct.pack("Q", len(a)) + a
+                client_socket.sendall(message)
+        except:
+            pass
             
     def Send_Audio(self):
         HOST = socket.gethostname()
@@ -199,7 +223,6 @@ class Owner:
             client.send(encrypted_txt)   
     
     def Update_window(self,decrypted_msg):
-        print(decrypted_msg)
         y_position=25
         self.chat_messages.insert(tk.END, decrypted_msg + "\n")
         y_position += 1
@@ -292,7 +315,8 @@ class Client:
         ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
         print(ip)
         server_port = 9999
-        self.s.connect((ip, server_port))       
+        self.s.connect((ip, server_port))   
+        self.Join_Audio_Server()    
         try:  
             self.window.destroy()
             self.servers_public_key=self.s.recv(1024)
@@ -304,6 +328,35 @@ class Client:
             threading.Thread(target=self.recieve_msg).start()
         except Exception as e: print(e)
 
+    def Join_Audio_Server(self):
+        host_ip='192.168.56.1'
+        port=7777
+        client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        client_socket.connect((host_ip,port))
+        threading.Thread(target=self.receive_microphone_output,args=(client_socket,)).start()
+    
+    def receive_microphone_output(self,client_socket):
+        mode = 'get'
+        audio, _ = ps.audioCapture(mode=mode)
+
+        data = b""
+        payload_size = struct.calcsize("Q")
+        while True:
+            while len(data) < payload_size:
+                packet = client_socket.recv(4*1024) # 4K
+                if not packet:
+                    break
+                data += packet
+            packed_msg_size = data[:payload_size]
+            data = data[payload_size:]
+            msg_size = struct.unpack("Q", packed_msg_size)[0]
+
+            while len(data) < msg_size:
+                data += client_socket.recv(4*1024)
+            frame_data = data[:msg_size]
+            data = data[msg_size:]
+            frame = pickle.loads(frame_data)
+            audio.put(frame)
     
     def send_screenshot(self):
         WIDTH = 1900
@@ -332,10 +385,10 @@ class Client:
             
     def recieve_msg(self):#recv msg and decrypt it, dispaly on screen,working
         y_position=25
-        print(1)
         while True:
             try:
                 message=self.s.recv(1024)
+                print(message)
                 decrypted_message=self.decrypt_msg(message,self.key).decode()               
                 self.chat_messages.insert(tk.END, decrypted_message + "\n")
                 y_position += 1
