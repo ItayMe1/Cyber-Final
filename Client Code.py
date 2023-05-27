@@ -102,32 +102,6 @@ class Owner:
                 client_socket.sendall(message)
         except:
             pass
-            
-    def Send_Audio(self):
-        HOST = socket.gethostname()
-        PORT = 5000
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 44100
-        CHUNK = 1024
-
-        p = pyaudio.PyAudio()
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        output=True,
-                        frames_per_buffer=CHUNK)
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((HOST, PORT))
-            print("Connected to", HOST + ":" + str(PORT))
-
-            while True:
-                try:
-                    data = client_socket.recv(CHUNK)
-                    stream.write(data)
-                except:
-                    pass
   
         
     def Find_p_key(self,client):
@@ -174,7 +148,7 @@ class Owner:
         btn_listen=tk.Button(self.window, text='Share Screen', width=50)#add a function
         btn_listen.pack(anchor=tk.CENTER,expand=True)
 
-        btn_video=tk.Button(self.window,text='start share microphone',width=50,command=self.Send_Audio)
+        btn_video=tk.Button(self.window,text='start share microphone',width=50)
         btn_video.pack(anchor=tk.CENTER,expand=True)
 
         self.window.mainloop()               
@@ -499,7 +473,7 @@ class Send_Camera:
         print('Listening at:', socket_address)
         self.send_frames(server_socket)
 
-    def send_frames(self,server_socket):
+    def send_frames(self, server_socket):
         vid = cv2.VideoCapture(0)
         fps, st, frames_to_count, cnt = (0, 0, 20, 0)
         WIDTH = 400
@@ -516,6 +490,7 @@ class Send_Camera:
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord('q'):
                     server_socket.close()
+                    vid.release()
                     break
                 if cnt == frames_to_count:
                     try:
@@ -524,7 +499,16 @@ class Send_Camera:
                         cnt = 0
                     except:
                         pass
-                cnt += 1        
+                cnt += 1
+                ret, encoded_frame = cv2.imencode('.jpg', frame)
+                data = base64.b64encode(encoded_frame).decode('utf-8')
+                server_socket.sendto(data.encode('utf-8'), client_addr)
+
+                if cv2.getWindowProperty('TRANSMITTING VIDEO', cv2.WND_PROP_VISIBLE) < 1:
+                    # Check if the "TRANSMITTING VIDEO" window is closed
+                    server_socket.close()
+                    vid.release()
+                    break        
 def Home_Screen_GUI():
     global window
     window=tk.Tk()
