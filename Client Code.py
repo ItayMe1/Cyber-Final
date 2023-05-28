@@ -64,8 +64,8 @@ class Owner:
     def active_chat(self):
         self.s.listen()
         while True:
-            client, ip = self.s.accept()
             threading.Thread(target=self.Audio_Server).start()
+            client, ip = self.s.accept()
             ##The Protocol
             client.send(self.public_key)##sending the client the server p_key
             client_public_key=client.recv(1024)
@@ -471,44 +471,45 @@ class Send_Camera:
         socket_address = (self.host_ip, self.port)
         server_socket.bind(socket_address)
         print('Listening at:', socket_address)
-        self.send_frames(server_socket)
+        self.Accept_Camera_connection(server_socket)
 
-    def send_frames(self, server_socket):
-        vid = cv2.VideoCapture(0)
-        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
-        WIDTH = 400
-
+    def Accept_Camera_connection(self, server_socket):
         while True:
             msg, client_addr = server_socket.recvfrom(self.BUFF_SIZE)
             print('GOT connection from ', client_addr)
+            threading.Thread(target=self.Send_Frames(server_socket,client_addr)).start()
+    def Send_Frames(self,server_socket,client_addr):
+        
+        vid = cv2.VideoCapture(0)
+        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
+        WIDTH = 400
+        while vid.isOpened():
+            _, frame = vid.read()
+            frame = imutils.resize(frame, width=WIDTH)
+            frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.imshow('TRANSMITTING VIDEO', frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                server_socket.close()
+                vid.release()
+                break
+            if cnt == frames_to_count:
+                try:
+                    fps = round(frames_to_count / (time.time() - st))
+                    st = time.time()
+                    cnt = 0
+                except:
+                    pass
+            cnt += 1
+            ret, encoded_frame = cv2.imencode('.jpg', frame)
+            data = base64.b64encode(encoded_frame).decode('utf-8')
+            server_socket.sendto(data.encode('utf-8'), client_addr)
 
-            while vid.isOpened():
-                _, frame = vid.read()
-                frame = imutils.resize(frame, width=WIDTH)
-                frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.imshow('TRANSMITTING VIDEO', frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    server_socket.close()
-                    vid.release()
-                    break
-                if cnt == frames_to_count:
-                    try:
-                        fps = round(frames_to_count / (time.time() - st))
-                        st = time.time()
-                        cnt = 0
-                    except:
-                        pass
-                cnt += 1
-                ret, encoded_frame = cv2.imencode('.jpg', frame)
-                data = base64.b64encode(encoded_frame).decode('utf-8')
-                server_socket.sendto(data.encode('utf-8'), client_addr)
-
-                if cv2.getWindowProperty('TRANSMITTING VIDEO', cv2.WND_PROP_VISIBLE) < 1:
-                    # Check if the "TRANSMITTING VIDEO" window is closed
-                    server_socket.close()
-                    vid.release()
-                    break        
+            if cv2.getWindowProperty('TRANSMITTING VIDEO', cv2.WND_PROP_VISIBLE) < 1:
+                # Check if the "TRANSMITTING VIDEO" window is closed
+                server_socket.close()
+                vid.release()
+                break            
 def Home_Screen_GUI():
     global window
     window=tk.Tk()
