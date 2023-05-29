@@ -7,18 +7,12 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import struct
 import pyperclip
-import mss
-import pyaudio
 from tkinter import scrolledtext
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric import rsa
 from zlib import compress
 import pyshine as ps
 import pickle
-import cv2
-import imutils
-import time
-import base64
 class Owner:
     global shift
     shift=10
@@ -83,7 +77,7 @@ class Owner:
     def Audio_Server(self):
         # Socket Create
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host_ip = '192.168.56.1'  # replace with the actual IP
+        host_ip = '0.0.0.0'  # replace with the actual IP
         port = 7777
         socket_address = (host_ip, port)
         server_socket.bind(socket_address)
@@ -102,15 +96,7 @@ class Owner:
                 client_socket.sendall(message)
         except:
             pass
-  
-        
-    def Find_p_key(self,client):
-        time=0
-        for i in self.clients:
-            if i==client: 
-                return self.list_of_keys[time+1]
-            time+=1
-                        
+                         
     def receive_messages(self,client):
         if isinstance(client, socket.socket):
             try:
@@ -118,7 +104,7 @@ class Owner:
                     message = client.recv(1024)#not receiving the msg,check why
                     print(message)
                     decrypted_message=self.decrypt_msg(message,self.private_key)
-                    msg=decrypted_message.split(':')
+                    msg=decrypted_message.split(':')    
                     self.name=msg[0]
                     self.txt=msg[1]
                     self.Msg_to_All(self.name,self.txt)
@@ -143,12 +129,6 @@ class Owner:
         self.window.geometry('300x300')
 
         btn_video=tk.Button(self.window,text='Copy Invite Link to the Call',width=50,command=self.ip2int)
-        btn_video.pack(anchor=tk.CENTER,expand=True)
-
-        btn_listen=tk.Button(self.window, text='Share Screen', width=50)#add a function
-        btn_listen.pack(anchor=tk.CENTER,expand=True)
-
-        btn_video=tk.Button(self.window,text='start share microphone',width=50)
         btn_video.pack(anchor=tk.CENTER,expand=True)
 
         self.window.mainloop()               
@@ -245,10 +225,12 @@ class Client:
         self.window.title("ZoOm")
         self.window.geometry('300x300')
         #Buttons   
+        name_label = tk.Label(self.window, text="Enter Room Code to enter!")
+        name_label.pack(side="top")
         ip_entry = tk.Entry(self.window)#The text area
         ip_entry.pack(side="top")
         self.window.bind('<Return>', lambda x: self.Getip())
-        send_button = tk.Button(self.window,text="Send", command=self.Getip)
+        send_button = tk.Button(self.window,text="send", command=self.Getip)
         send_button.pack(side="top")
         
         self.window.mainloop()
@@ -258,37 +240,9 @@ class Client:
         msg=ip_entry.get() 
         ip_entry.delete(0,len(msg))  
         self.int2ip(msg) 
-        
-    def Recieve_audio(self):
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 44100
-        CHUNK = 1024
-        HOST = socket.gethostname()
-        PORT = 5000
-
-        frames = []
-
-        p = pyaudio.PyAudio()
-        stream = p.open(format=FORMAT,
-                        channels=CHANNELS,
-                        rate=RATE,
-                        input=True,
-                        frames_per_buffer=CHUNK)
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((HOST, PORT))
-            server_socket.listen(1)
-            conn, address = server_socket.accept()
-            while True:
-                try:
-                    data = stream.read(CHUNK)
-                    conn.sendall(data)
-                    frames.append(data)
-                except:
-                    pass
    
-    def int2ip(self,msg):#getting the ip from button, and then convert it and connect   
+    def int2ip(self,msg):#getting the ip from button, and then convert it and connect  
+        global ip 
         self.s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
         ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
         print(ip)
@@ -299,15 +253,13 @@ class Client:
             self.window.destroy()
             self.servers_public_key=self.s.recv(1024)
             self.s.send(self.public_key)
-
-            threading.Thread(target=self.Recieve_audio).start()
-            threading.Thread(target=self.Client_Zoom_Gui).start()
+            
             threading.Thread(target=self.Chat_Gui).start()
             threading.Thread(target=self.recieve_msg).start()
         except Exception as e: print(e)
 
     def Join_Audio_Server(self):
-        host_ip='192.168.56.1'
+        host_ip=ip
         port=7777
         client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         client_socket.connect((host_ip,port))
@@ -335,31 +287,7 @@ class Client:
             data = data[msg_size:]
             frame = pickle.loads(frame_data)
             audio.put(frame)
-    
-    def send_screenshot(self):
-        WIDTH = 1900
-        HEIGHT = 1000
-        with mss() as sct:
-        # The region to capture
-            rect = {'top': 0, 'left': 0, 'width': WIDTH, 'height': HEIGHT}
 
-        while 'recording':
-            # Capture the screen
-            img = sct.grab(rect)
-            # Tweak the compression level here (0-9)
-            pixels = (img.rgb, 6)
-
-            # Send the size of the pixels length
-            size = len(pixels)
-            size_len = compress(size.bit_length() + 7) // 8
-            self.s.send(bytes([size_len]))
-
-            # Send the actual pixels length
-            size_bytes = size.to_bytes(size_len, 'big')
-            self.send(size_bytes)
-
-            # Send pixels
-            self.sendall(pixels)  
             
     def recieve_msg(self):#recv msg and decrypt it, dispaly on screen,working
         y_position=25
@@ -376,17 +304,6 @@ class Client:
                 self.chatwindow.mainloop()
             except:
                 pass
-        
-    def Client_Zoom_Gui(self):
-        self.window=tk.Tk()
-        self.window.title("ZoOm")
-        self.window.geometry('300x300')
-        btn_listen=tk.Button(self.window, text='Share Screen', width=50,command=self.send_screenshot)#add a function
-        btn_listen.pack(anchor=tk.CENTER,expand=True)
-
-        btn_video=tk.Button(self.window,text='Share Camera',width=50)
-        btn_video.pack(anchor=tk.CENTER,expand=True)
-        self.window.mainloop()
         
     def Chat_Gui(self):
         global name_entry,message_entry
@@ -423,93 +340,7 @@ class Client:
     def Client_send_message(self,name, message):#sending the encrypted txt,working
             txt=(f"{name}:{message}")
             encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
-            self.s.send(encrypt_txt)
-class Recv_Camera:
-    def __init__(self):
-        self.BUFF_SIZE = 65536
-        self.host_ip = "169.254.25.70"
-        self.port = 9999
-
-    def setup_connection(self):
-        print(self.host_ip)
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        host_address = (self.host_ip, self.port)
-        message = b'Hello'
-        client_socket.sendto(message, host_address)
-        self.receive_frames(client_socket)
-
-    def receive_frames(self,client_socket):
-        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
-
-        while True:
-            packet, _ = client_socket.recvfrom(self.BUFF_SIZE)
-            data = base64.b64decode(packet, ' /')
-            npdata = np.frombuffer(data, dtype=np.uint8)
-            frame = cv2.imdecode(npdata, 1)
-            frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.imshow("RECEIVING VIDEO", frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                client_socket.close()
-                break
-            if cnt == frames_to_count:
-                try:
-                    fps = round(frames_to_count / (time.time() - st))
-                    st = time.time()
-                    cnt = 0
-                except:
-                    pass
-            cnt += 1       
-class Send_Camera:
-    def __init__(self):
-        self.BUFF_SIZE = 65536
-        self.host_ip = "169.254.25.70"
-        self.port = 9999 
-
-    def setup_connection(self):
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        socket_address = (self.host_ip, self.port)
-        server_socket.bind(socket_address)
-        print('Listening at:', socket_address)
-        self.Accept_Camera_connection(server_socket)
-
-    def Accept_Camera_connection(self, server_socket):
-        while True:
-            msg, client_addr = server_socket.recvfrom(self.BUFF_SIZE)
-            print('GOT connection from ', client_addr)
-            threading.Thread(target=self.Send_Frames(server_socket,client_addr)).start()
-    def Send_Frames(self,server_socket,client_addr):
-        
-        vid = cv2.VideoCapture(0)
-        fps, st, frames_to_count, cnt = (0, 0, 20, 0)
-        WIDTH = 400
-        while vid.isOpened():
-            _, frame = vid.read()
-            frame = imutils.resize(frame, width=WIDTH)
-            frame = cv2.putText(frame, 'FPS: ' + str(fps), (10, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-            cv2.imshow('TRANSMITTING VIDEO', frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                server_socket.close()
-                vid.release()
-                break
-            if cnt == frames_to_count:
-                try:
-                    fps = round(frames_to_count / (time.time() - st))
-                    st = time.time()
-                    cnt = 0
-                except:
-                    pass
-            cnt += 1
-            ret, encoded_frame = cv2.imencode('.jpg', frame)
-            data = base64.b64encode(encoded_frame).decode('utf-8')
-            server_socket.sendto(data.encode('utf-8'), client_addr)
-
-            if cv2.getWindowProperty('TRANSMITTING VIDEO', cv2.WND_PROP_VISIBLE) < 1:
-                # Check if the "TRANSMITTING VIDEO" window is closed
-                server_socket.close()
-                vid.release()
-                break            
+            self.s.send(encrypt_txt)                   
 def Home_Screen_GUI():
     global window
     window=tk.Tk()
@@ -528,15 +359,13 @@ def Create_Owner():
     window.destroy()
     owner=Owner()  
     owner.start_Call() 
-    send_audio=Send_Camera()
-    send_audio.setup_connection() 
+ 
     
 def Create_Client():
     window.destroy()
     client=Client()  
     client.Join_Call()
-    audio=Recv_Camera()
-    audio.setup_connection()  
+
     
 try:    
     Home_Screen_GUI()
