@@ -356,7 +356,5 @@ def Create_Client():
     client=Client()  
     client.Join_Call()
 
-try:    
+if __name__=='__main__':
     Home_Screen_GUI()
-except :
-    pass
