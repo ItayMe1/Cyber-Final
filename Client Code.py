@@ -1,16 +1,11 @@
-from logging import exception
 import socket
 import threading
 import tkinter as tk
-import numpy as np
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_OAEP
 import struct
 import pyperclip
 from tkinter import scrolledtext
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric import rsa
-from zlib import compress
 import pyshine as ps
 import pickle
 class Owner:
@@ -102,7 +97,6 @@ class Owner:
             try:
                 while True:
                     message = client.recv(1024)#not receiving the msg,check why
-                    print(message)
                     decrypted_message=self.decrypt_msg(message,self.private_key)
                     msg=decrypted_message.split(':')    
                     self.name=msg[0]
@@ -174,7 +168,6 @@ class Owner:
         
     def Msg_to_All(self,name,msg):
         txt=(f"{name}:{msg}")
-        ##encrypted_txt=self.caesar_encrypt(txt)
         for client in self.clients:
             clients_public_key=self.Find_clients_public_key(client)
             encrypted_txt=self.encrypt_msg(clients_public_key,txt)
@@ -245,7 +238,6 @@ class Client:
         global ip 
         self.s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
         ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
-        print(ip)
         server_port = 9999
         self.s.connect((ip, server_port))   
         self.Join_Audio_Server()    
@@ -294,7 +286,6 @@ class Client:
         while True:
             try:
                 message=self.s.recv(1024)
-                print(message)
                 decrypted_message=self.decrypt_msg(message,self.key).decode()               
                 self.chat_messages.insert(tk.END, decrypted_message + "\n")
                 y_position += 1
@@ -359,14 +350,12 @@ def Create_Owner():
     window.destroy()
     owner=Owner()  
     owner.start_Call() 
- 
-    
+   
 def Create_Client():
     window.destroy()
     client=Client()  
     client.Join_Call()
 
-    
 try:    
     Home_Screen_GUI()
 except :
