@@ -53,7 +53,6 @@ class Owner:
     def active_chat(self):
         self.s.listen()
         while True:
-            threading.Thread(target=self.Audio_Server).start()
             client, ip = self.s.accept()
             ##The Protocol
             client.send(self.public_key)##sending the client the server p_key
@@ -69,28 +68,6 @@ class Owner:
             self.ip_addresses.append(ip)
             self.clients.append(client) 
             
-    def Audio_Server(self):
-        # Socket Create
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host_ip = '0.0.0.0'  # replace with the actual IP
-        port = 7777
-        socket_address = (host_ip, port)
-        server_socket.bind(socket_address)
-        server_socket.listen()
-        client, ip = server_socket.accept()
-        threading.Thread(target=self.send_microphone_output,args=(client,)).start()
-        
-    def send_microphone_output(self,client_socket):
-        mode = 'send'
-        audio, context = ps.audioCapture(mode=mode)
-        try:
-            while True:
-                frame = audio.get()
-                a = pickle.dumps(frame)
-                message = struct.pack("Q", len(a)) + a
-                client_socket.sendall(message)
-        except:
-            pass
                          
     def receive_messages(self,client):
         if isinstance(client, socket.socket):
@@ -239,8 +216,7 @@ class Client:
         self.s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
         ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
         server_port = 9999
-        self.s.connect((ip, server_port))   
-        self.Join_Audio_Server()    
+        self.s.connect((ip, server_port))     
         try:  
             self.window.destroy()
             self.servers_public_key=self.s.recv(1024)
@@ -250,35 +226,6 @@ class Client:
             threading.Thread(target=self.recieve_msg).start()
         except Exception as e: print(e)
 
-    def Join_Audio_Server(self):
-        host_ip=ip
-        port=7777
-        client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-        client_socket.connect((host_ip,port))
-        threading.Thread(target=self.receive_microphone_output,args=(client_socket,)).start()
-    
-    def receive_microphone_output(self,client_socket):
-        mode = 'get'
-        audio, _ = ps.audioCapture(mode=mode)
-
-        data = b""
-        payload_size = struct.calcsize("Q")
-        while True:
-            while len(data) < payload_size:
-                packet = client_socket.recv(4*1024) # 4K
-                if not packet:
-                    break
-                data += packet
-            packed_msg_size = data[:payload_size]
-            data = data[payload_size:]
-            msg_size = struct.unpack("Q", packed_msg_size)[0]
-
-            while len(data) < msg_size:
-                data += client_socket.recv(4*1024)
-            frame_data = data[:msg_size]
-            data = data[msg_size:]
-            frame = pickle.loads(frame_data)
-            audio.put(frame)
 
             
     def recieve_msg(self):#recv msg and decrypt it, dispaly on screen,working
@@ -295,6 +242,10 @@ class Client:
                 self.chatwindow.mainloop()
             except:
                 pass
+    def Client_send_message(self,name, message):#sending the encrypted txt,working
+        txt=(f"{name}:{message}")
+        encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
+        self.s.send(encrypt_txt) 
         
     def Chat_Gui(self):
         global name_entry,message_entry
@@ -327,11 +278,65 @@ class Client:
         message = message_entry.get()
         self.Client_send_message(name, message)
         message_entry.delete(0, tk.END)#deleting the message box after sending
-  
-    def Client_send_message(self,name, message):#sending the encrypted txt,working
-            txt=(f"{name}:{message}")
-            encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
-            self.s.send(encrypt_txt)                   
+class Receive_Audio:
+    def Join_Audio_Server(self):
+        host_ip=ip
+        port=7777
+        client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        client_socket.connect((host_ip,port))
+        threading.Thread(target=self.receive_microphone_output,args=(client_socket,)).start()
+    
+    def receive_microphone_output(self,client_socket):
+        try:
+            mode = 'get'
+            audio, _ = ps.audioCapture(mode=mode)
+
+            data = b""
+            payload_size = struct.calcsize("Q")
+            while True:
+                while len(data) < payload_size:
+                    packet = client_socket.recv(4*1024) # 4K
+                    if not packet:
+                        break
+                    data += packet
+                packed_msg_size = data[:payload_size]
+                data = data[payload_size:]
+                msg_size = struct.unpack("Q", packed_msg_size)[0]
+
+                while len(data) < msg_size:
+                    data += client_socket.recv(4*1024)
+                frame_data = data[:msg_size]
+                data = data[msg_size:]
+                frame = pickle.loads(frame_data)
+                audio.put(frame)          
+        except:
+            pass        
+class Send_Audio:
+    def Audio_Server(self):
+        # Socket Create
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        host_ip = '0.0.0.0'  # replace with the actual IP
+        port = 7777
+        socket_address = (host_ip, port)
+        server_socket.bind(socket_address)
+        server_socket.listen()
+        client, ip = server_socket.accept()
+        threading.Thread(target=self.send_microphone_output,args=(client,)).start()
+        
+    def send_microphone_output(self,client_socket):
+        try:
+            mode = 'send'
+            audio, context = ps.audioCapture(mode=mode)
+            try:
+                while True:
+                    frame = audio.get()
+                    a = pickle.dumps(frame)
+                    message = struct.pack("Q", len(a)) + a
+                    client_socket.sendall(message)
+            except:
+                pass
+        except:
+            pass
 def Home_Screen_GUI():
     global window
     window=tk.Tk()
@@ -350,11 +355,15 @@ def Create_Owner():
     window.destroy()
     owner=Owner()  
     owner.start_Call() 
+    send_audio=Send_Audio()
+    send_audio.Audio_Server()
    
 def Create_Client():
     window.destroy()
     client=Client()  
     client.Join_Call()
+    receive_audio=Receive_Audio()
+    receive_audio.Join_Audio_Server()
 
 if __name__=='__main__':
     Home_Screen_GUI()
