@@ -8,6 +8,7 @@ import pyperclip
 from tkinter import scrolledtext
 import pyshine as ps
 import pickle
+import customtkinter as ctk
 class Owner:
     global shift
     shift=10
@@ -67,7 +68,7 @@ class Owner:
         if not self.is_ip_exist(ip):
             self.ip_addresses.append(ip)
             self.clients.append(client) 
-            
+        
                          
     def receive_messages(self,client):
         if isinstance(client, socket.socket):
@@ -95,12 +96,14 @@ class Owner:
         return ip in self.ip_addresses          
             
     def Owner_Zoom_Gui(self):
-        self.window=tk.Tk()
+        self.window=ctk.CTk()
+        print(type(self.window))
         self.window.title("ZoOm")
-        self.window.geometry('300x300')
+        self.window.geometry('300x200')
 
-        btn_video=tk.Button(self.window,text='Copy Invite Link to the Call',width=50,command=self.ip2int)
-        btn_video.pack(anchor=tk.CENTER,expand=True)
+        btn_listen = ctk.CTkButton(master=self.window,text='Copy Invite Link to the Call',command=self.ip2int)
+        btn_listen.pack(pady=50,padx=50)
+        
 
         self.window.mainloop()               
         
@@ -110,28 +113,29 @@ class Owner:
         pyperclip.copy(ip_int)   
         
     def Owner_Chat_Gui(self):
-        self.chat_window = tk.Tk()
+        self.chat_window = ctk.CTk()
         self.chat_window.title("Chat Owner")
-        
         self.chat_messages = scrolledtext.ScrolledText(self.chat_window, height=10, width=50)
         self.chat_messages.pack(anchor=tk.W,expand=True)
-
-        message_label = tk.Label(self.chat_window, text="Chat Messages:")
+        
+        message_label = ctk.CTkLabel(master=self.chat_window,text="Chat Messages:")
         message_label.pack()
         
-        name_label = tk.Label(self.chat_window, text="Enter your name:")
+        name_label = ctk.CTkLabel(master=self.chat_window, text="Enter your name:")
         name_label.pack()
-        self.name_entry = tk.Entry(self.chat_window)
+        
+        self.name_entry = ctk.CTkEntry(master=self.chat_window)
         self.name_entry.pack()
 
-        message_label = tk.Label(self.chat_window, text="Enter message:")
+        message_label = ctk.CTkLabel(master=self.chat_window, text="Enter message:")
         message_label.pack()
-        self.message_entry2 = tk.Entry(self.chat_window)
+        
+        self.message_entry2 = ctk.CTkEntry(master=self.chat_window)
         self.message_entry2.pack()
         
                     
         self.chat_window.bind('<Return>', lambda event: self.Owner_send_button_clicked())
-        send_button = tk.Button(self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked())
+        send_button = ctk.CTkButton(master=self.chat_window, text="Send", command=lambda: self.Owner_send_button_clicked())
         send_button.pack()
         self.chat_window.mainloop()
                    
@@ -191,16 +195,16 @@ class Client:
         global shift
         shift=10
         #Tempararly window
-        self.window=tk.Tk()
+        self.window=ctk.CTk()
         self.window.title("ZoOm")
         self.window.geometry('300x300')
         #Buttons   
-        name_label = tk.Label(self.window, text="Enter Room Code to enter!")
+        name_label = ctk.CTkLabel(master=self.window, text="Enter Room Code to enter!")
         name_label.pack(side="top")
-        ip_entry = tk.Entry(self.window)#The text area
+        ip_entry = ctk.CTkEntry(self.window)#The text area
         ip_entry.pack(side="top")
         self.window.bind('<Return>', lambda x: self.Getip())
-        send_button = tk.Button(self.window,text="send", command=self.Getip)
+        send_button = ctk.CTkButton(master=self.window,text="send", command=self.Getip)
         send_button.pack(side="top")
         
         self.window.mainloop()
@@ -249,27 +253,27 @@ class Client:
         
     def Chat_Gui(self):
         global name_entry,message_entry
-        self.chatwindow = tk.Tk()
+        self.chatwindow = ctk.CTk()
         self.chatwindow.title("Chat Client")
         
         self.chat_messages = scrolledtext.ScrolledText(self.chatwindow, height=10, width=50)
         self.chat_messages.pack(anchor=tk.W,expand=True)
 
-        message_label = tk.Label(self.chatwindow, text="Chat Messages:")
+        message_label = ctk.CTkLabel(master=self.chatwindow, text="Chat Messages:")
         message_label.pack()
         
-        name_label = tk.Label(self.chatwindow, text="Enter your name:")
+        name_label = ctk.CTkLabel(master=self.chatwindow, text="Enter your name:")
         name_label.pack()
-        name_entry = tk.Entry(self.chatwindow)
+        name_entry = ctk.CTkEntry(master=self.chatwindow)
         name_entry.pack()
 
-        message_label = tk.Label(self.chatwindow, text="Enter message:")
+        message_label = ctk.CTkLabel(master=self.chatwindow, text="Enter message:")
         message_label.pack()
-        message_entry = tk.Entry(self.chatwindow)
+        message_entry = ctk.CTkEntry(master=self.chatwindow)
         message_entry.pack()
                     
         self.chatwindow.bind('<Return>', lambda event: self.Client_send_button_clicked())
-        send_button = tk.Button(self.chatwindow, text="Send", command=lambda: self.Client_send_button_clicked())
+        send_button = ctk.CTkButton(master=self.chatwindow, text="Send", command=lambda: self.Client_send_button_clicked())
         send_button.pack()
         self.chatwindow.mainloop()
     
@@ -337,33 +341,52 @@ class Send_Audio:
                 pass
         except:
             pass
-def Home_Screen_GUI():
-    global window
-    window=tk.Tk()
-    window.title("ZoOm")
-    window.geometry('300x300')
+class Start_Gui():
+    def Welcome_Page(self):
+        ctk.set_default_color_theme("green")
+        self.first_screen=ctk.CTk()
+        self.first_screen.geometry('700x700')
+        label = ctk.CTkLabel(self.first_screen,text="Welcome!")
+        label.pack(pady=10,padx=10)
+        label2 = ctk.CTkLabel(master=self.first_screen,text='Click to join our Comuunity')
+        label2.pack(pady=10,padx=10)
+        button = ctk.CTkButton(master=self.first_screen,text='Start',command=self.close_first_screen)
+        button.pack(pady=10,padx=10)        
     
-    btn_listen=tk.Button(window, text='Start a Call', width=50, command=Create_Owner)
-    btn_listen.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-    btn_video=tk.Button(window,text='Join a Call',width=50,command=Create_Client)
-    btn_video.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.first_screen.mainloop()
     
-    window.mainloop()
+    def close_first_screen(self):
+        self.first_screen.destroy()
+        self.Home_Screen_GUI()
+        
+    def Home_Screen_GUI(self):
+        global window
+        window=ctk.CTk()
+        window.title("ZoOm")
+        window.geometry('300x300')
+        
+        btn_listen = ctk.CTkButton(master=window,text='Start a Call',command=self.Create_Owner)
+        btn_listen.pack(pady=10,padx=10)  
+        
+        btn_listen = ctk.CTkButton(master=window,text='Join a Call',command=self.Create_Client)
+        btn_listen.pack(pady=10,padx=10)
+        
+        window.mainloop()
 
-def Create_Owner():
-    window.destroy()
-    owner=Owner()  
-    owner.start_Call() 
-    send_audio=Send_Audio()
-    send_audio.Audio_Server()
-   
-def Create_Client():
-    window.destroy()
-    client=Client()  
-    client.Join_Call()
-    receive_audio=Receive_Audio()
-    receive_audio.Join_Audio_Server()
+    def Create_Owner(self):
+        window.destroy()
+        owner=Owner()  
+        owner.start_Call() 
+        send_audio=Send_Audio()
+        send_audio.Audio_Server()
+    
+    def Create_Client(self):
+        window.destroy()
+        client=Client()  
+        client.Join_Call()
+        receive_audio=Receive_Audio()
+        receive_audio.Join_Audio_Server()
 
 if __name__=='__main__':
-    Home_Screen_GUI()
+    Gui=Start_Gui()
+    Gui.Welcome_Page()
