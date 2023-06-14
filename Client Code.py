@@ -9,6 +9,9 @@ from tkinter import scrolledtext
 import pyshine as ps
 import pickle
 import customtkinter as ctk
+from tkinter.filedialog import askopenfilename
+import os
+import platform
 class Owner:
     global shift
     shift=10
@@ -74,7 +77,7 @@ class Owner:
         if isinstance(client, socket.socket):
             try:
                 while True:
-                    message = client.recv(1024)#not receiving the msg,check why
+                    message = client.recv(1024)
                     decrypted_message=self.decrypt_msg(message,self.private_key)
                     msg=decrypted_message.split(':')    
                     self.name=msg[0]
@@ -107,9 +110,10 @@ class Owner:
 
         self.window.mainloop()               
         
-    def ip2int(self):#converting your ip into numbers,working
-        ip = self.get_ip_address()
-        ip_int = struct.unpack("!I", socket.inet_aton(ip))[0]
+    def ip2int(self):#converting your ip into numbers
+        global ip_server
+        ip_server = self.get_ip_address()
+        ip_int = struct.unpack("!I", socket.inet_aton(ip_server))[0]
         pyperclip.copy(ip_int)   
         
     def Owner_Chat_Gui(self):
@@ -142,10 +146,10 @@ class Owner:
     def Owner_send_button_clicked(self):#caused if the owner sends a message
         name = self.name_entry.get()
         message = self.message_entry2.get()
+        self.message_entry2.delete(0, len(message))
         self.Msg_to_All(name, message)
         self.Update_window_for_Owner(name, message)
         
-        self.message_entry2.delete(0, tk.END)#deleting the message box after sending#######check why not working
         
     def Msg_to_All(self,name,msg):
         txt=(f"{name}:{msg}")
@@ -216,11 +220,11 @@ class Client:
         self.int2ip(msg) 
    
     def int2ip(self,msg):#getting the ip from button, and then convert it and connect  
-        global ip 
+        global ip_for_client
         self.s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)   
-        ip=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers,working
+        ip_for_client=socket.inet_ntoa(struct.pack('!I', int(msg)))#Returning a ip from numbers
         server_port = 9999
-        self.s.connect((ip, server_port))     
+        self.s.connect((ip_for_client, server_port))     
         try:  
             self.window.destroy()
             self.servers_public_key=self.s.recv(1024)
@@ -232,7 +236,7 @@ class Client:
 
 
             
-    def recieve_msg(self):#recv msg and decrypt it, dispaly on screen,working
+    def recieve_msg(self):#recv msg and decrypt it, dispaly on screen
         y_position=25
         while True:
             try:
@@ -246,7 +250,7 @@ class Client:
                 self.chatwindow.mainloop()
             except:
                 pass
-    def Client_send_message(self,name, message):#sending the encrypted txt,working
+    def Client_send_message(self,name, message):#sending the encrypted txt
         txt=(f"{name}:{message}")
         encrypt_txt=self.encrypt_msg(self.servers_public_key,txt)
         self.s.send(encrypt_txt) 
@@ -284,7 +288,7 @@ class Client:
         message_entry.delete(0, tk.END)#deleting the message box after sending
 class Receive_Audio:
     def Join_Audio_Server(self):
-        host_ip=ip
+        host_ip=ip_for_client
         port=7777
         client_socket=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
         client_socket.connect((host_ip,port))
@@ -299,7 +303,7 @@ class Receive_Audio:
             payload_size = struct.calcsize("Q")
             while True:
                 while len(data) < payload_size:
-                    packet = client_socket.recv(4*1024) # 4K
+                    packet = client_socket.recv(4*1024) 
                     if not packet:
                         break
                     data += packet
@@ -319,7 +323,7 @@ class Send_Audio:
     def Audio_Server(self):
         # Socket Create
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host_ip = '0.0.0.0'  # replace with the actual IP
+        host_ip = '0.0.0.0'
         port = 7777
         socket_address = (host_ip, port)
         server_socket.bind(socket_address)
@@ -330,18 +334,102 @@ class Send_Audio:
     def send_microphone_output(self,client_socket):
         try:
             mode = 'send'
-            audio, context = ps.audioCapture(mode=mode)
+            audio, context = ps.audioCapture(mode=mode)#capture audio
             try:
                 while True:
-                    frame = audio.get()
-                    a = pickle.dumps(frame)
-                    message = struct.pack("Q", len(a)) + a
+                    frame = audio.get()#take frames from it
+                    a = pickle.dumps(frame)#bytes
+                    message = struct.pack("Q", len(a)) + a#pack it in a length,binary-q 8 bytes
                     client_socket.sendall(message)
             except:
                 pass
         except:
             pass
-class Start_Gui():
+class Send_file:
+    def __init__(self):
+        self.clients=[]
+    def establish_connection(self):
+        global ip_server
+        HOST = ip_server
+        PORT = 5555 
+        # Create a socket object
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Bind the socket to a specific address and port
+        server_socket.bind((HOST, PORT))
+
+        # Listen for incoming connections
+        server_socket.listen()
+
+        print('Server listening on {}:{}'.format(HOST, PORT))
+        threading.Thread(target=self.send_file_gui).start()
+        # Accept a client connection
+        client_socket, client_address = server_socket.accept()
+        self.clients.append(client_socket)
+        print('Connected to client:', client_address)
+
+    def send_file_gui(self):
+        self.file_gui = ctk.CTk()
+        self.file_gui.geometry('300x300')
+        self.file_gui.title("File sender")
+        send_file_button = ctk.CTkButton(master=self.file_gui, text="Pick a file to send", command=self.send_file)
+        send_file_button.pack()
+        self.file_gui.mainloop()
+        
+    def send_file(self):
+        for i in self.clients:
+            # Send the file to the client
+            file_path = askopenfilename()
+
+            # Send the file name to the client
+            file_name = os.path.basename(file_path)
+            i.send(file_name.encode())
+
+            # Open the file for reading
+            with open(file_path, 'rb') as file:
+                # Read file data and send it to the client
+                while True:
+                    data = file.read(1024)
+                    if not data:
+                        break
+                    i.sendall(data)
+            
+            print('File sent successfully')
+class Receive_file:
+    def connect_to_server(self):
+        HOST = ip_for_client
+        PORT = 5555 
+        # Create a socket object
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Connect to the server
+        client_socket.connect((HOST, PORT))
+        print('Connected to server')
+        threading.Thread(target=self.receive_file,args=(client_socket,)).start()
+    
+    def open_file(self,file_path):
+        system = platform.system()
+        if system == 'Windows':
+            os.startfile(file_path)
+        else:  
+            pass
+
+    def receive_file(self,client_socket):
+        # Receive the file name
+        file_name = client_socket.recv(1024).decode()
+
+        # Receive the file content and save it
+        with open(file_name, 'wb') as file:
+            while True:
+                data = client_socket.recv(1024)
+                data2=data
+                if not data or data2==data:
+                    break
+                file.write(data)
+
+        print('File received successfully')
+        self.open_file(file_name)
+class Start_Gui:
     def Welcome_Page(self):
         ctk.set_default_color_theme("green")
         self.first_screen=ctk.CTk()
@@ -379,6 +467,8 @@ class Start_Gui():
         owner.start_Call() 
         send_audio=Send_Audio()
         send_audio.Audio_Server()
+        send_file=Send_file()
+        send_file.establish_connection()
     
     def Create_Client(self):
         window.destroy()
@@ -386,6 +476,8 @@ class Start_Gui():
         client.Join_Call()
         receive_audio=Receive_Audio()
         receive_audio.Join_Audio_Server()
+        recv_file=Receive_file()
+        recv_file.connect_to_server()
 
 if __name__=='__main__':
     Gui=Start_Gui()
